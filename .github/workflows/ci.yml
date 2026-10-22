@@ -100,11 +100,15 @@ jobs:
           done
           docker buildx build --load -f infrastructure/docker/web.Dockerfile -t orbit-web:ci .
       - name: Scan images (fail on fixable critical/high vulnerabilities)
+        # Scans every image before failing, so one run reports all findings.
         run: |
-          for image in orbit-api:ci orbit-worker:ci orbit-web:ci orbit-ops:ci; do
+          failed=""
+          for image in orbit-api:ci orbit-worker:ci orbit-migrate:ci orbit-web:ci orbit-ops:ci; do
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.66.0 \
-              image --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$image"
+              image --skip-version-check --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$image" \
+              || failed="$failed $image"
           done
+          if [ -n "$failed" ]; then echo "::error::Fixable critical/high vulnerabilities in:$failed"; exit 1; fi
       - name: Ops image has its tools
         run: docker run --rm orbit-ops:ci sh -c 'node --version && mysqldump --version && age --version'
 

@@ -24,6 +24,12 @@ RUN pnpm --filter @orbit/api deploy --prod --legacy /out \
 FROM base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
+# Runtime images start node directly: package managers are build-time tools. Removing the copies
+# bundled with the base image (npm, npx, corepack/pnpm, yarn) drops their dependencies (and their
+# advisories) from what ships.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
+  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx \
+  /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=build --chown=node:node /out ./
 USER node
 ENTRYPOINT ["/sbin/tini", "--"]
