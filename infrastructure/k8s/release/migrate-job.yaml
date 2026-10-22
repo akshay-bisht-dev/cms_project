@@ -1,0 +1,40 @@
+# Applied by the release pipeline once per release, after a fresh backup has been verified, before the
+# new images roll out (docs/release-checklist.md). Not part of the base: it must not run on every apply.
+#   kubectl -n orbit apply -f migrate-job.yaml && kubectl -n orbit wait --for=condition=complete job/orbit-migrate --timeout=15m
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: orbit-migrate
+  namespace: orbit
+spec:
+  backoffLimit: 0                  # a failed migration needs a person, not a retry
+  activeDeadlineSeconds: 1800
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: migrate, orbit/tier: release }
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: migrate
+          image: ghcr.io/example/orbit-migrate:0.0.0   # the pipeline substitutes the release tag
+          envFrom:
+            - secretRef: { name: orbit-migrate }       # DATABASE_URL of the migration (DDL) user
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }

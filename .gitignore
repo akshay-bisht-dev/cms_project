@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.next-e2e/
+out/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.local/
+*.log
+.DS_Store
+playwright-report/
+test-results/
+apps/api/openapi/openapi.json.tmp
+# Database dumps contain all customer data (scripts/backup writes here by default).
+backups/

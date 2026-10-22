@@ -1,0 +1,25 @@
+# ingress-nginx + cert-manager. Same routing as the compose Nginx: /api and /socket.io to the API,
+# everything else to the web app. The overlay sets the host and TLS secret.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: orbit
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 2m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [orbit.example.com]
+      secretName: orbit-tls
+  rules:
+    - host: orbit.example.com
+      http:
+        paths:
+          - { path: /api, pathType: Prefix, backend: { service: { name: api, port: { name: http } } } }
+          - { path: /socket.io, pathType: Prefix, backend: { service: { name: api, port: { name: http } } } }
+          - { path: /, pathType: Prefix, backend: { service: { name: web, port: { name: http } } } }

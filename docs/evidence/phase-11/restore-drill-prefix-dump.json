@@ -1,0 +1,46 @@
+{
+  "manifest": "/private/tmp/claude-502/-Users-akshaybisht-cms-project/a23e6715-8fe3-4b9f-af99-333d05f10afa/scratchpad/backups/orbit_perf_test-2026-10-22-0559.manifest.json",
+  "file": "orbit_perf_test-2026-10-22-0559.sql.gz",
+  "startedAt": "2026-10-22T06:05:10.221Z",
+  "steps": [
+    {
+      "name": "checksum ok",
+      "sha256": "96ffeee6d644f09d",
+      "atMs": 264
+    },
+    {
+      "name": "scratch database created",
+      "database": "orbit_restore_verify_20261022060510",
+      "atMs": 316
+    },
+    {
+      "name": "restored",
+      "seconds": 99.4,
+      "atMs": 99418
+    },
+    {
+      "name": "compared with manifest",
+      "tables": 108,
+      "triggers": 15,
+      "migrations": 13,
+      "rows": 1394747,
+      "drift": [],
+      "atMs": 100069
+    },
+    {
+      "name": "invariants",
+      "orphanMembers": 0,
+      "orphanTimeEntries": 0,
+      "paidWithoutPayments": 0,
+      "auditLogAppendOnly": true,
+      "atMs": 100138
+    },
+    {
+      "name": "scratch database dropped",
+      "atMs": 101098
+    }
+  ],
+  "problems": [],
+  "ok": true,
+  "seconds": 101.1
+}

@@ -1,0 +1,35 @@
+# Weekly dynamic scan of staging (OWASP ZAP baseline: passive checks, no attacks) and dependency audit.
+# Findings are reviewed against docs/security-checklist.md; accepted rules go in .zap/rules.tsv with a reason.
+name: Security scan
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'      # Mondays 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write              # ZAP opens or updates an issue with the report
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-24.04
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: ${{ vars.APP_URL }}
+          rules_file_name: .zap/rules.tsv
+          cmd_options: '-a'
+          fail_action: true
+
+  dependency-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      # Production dependencies must be free of known vulnerabilities; dev-only findings are reviewed.
+      - run: pnpm audit --prod

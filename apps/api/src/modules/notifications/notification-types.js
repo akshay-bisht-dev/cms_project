@@ -1,0 +1,27 @@
+// Notification types. `email` is the default for the email channel; members can change both
+// channels per type in their preferences.
+export const NOTIFICATION_TYPES = Object.freeze({
+  'employees.invitation_accepted': { label: 'Someone accepted your invitation', email: false },
+  'employees.profile_changed': { label: 'Your profile was changed by someone else', email: true },
+  'access.roles_changed': { label: 'Your roles changed', email: true },
+  'attendance.missed_clock_out': { label: 'A session was closed because you did not clock out', email: true },
+  'attendance.correction_requested': { label: 'Someone asked you to approve an attendance correction', email: false },
+  'attendance.correction_decided': { label: 'Your attendance correction was approved or rejected', email: false },
+  'timesheets.submitted': { label: 'A timesheet is waiting for your approval', email: false },
+  'tasks.assigned': { label: 'A task was assigned to you', email: true },
+  'tasks.commented': { label: 'Someone commented on a task assigned to you', email: false },
+  'tasks.overdue': { label: 'A task assigned to you is overdue', email: false },
+  'calendar.invited': { label: 'You were invited to a meeting', email: true },
+  'monitoring.agent_paired': { label: 'A desktop app was connected to your account', email: true },
+  'monitoring.agent_revoked': { label: 'One of your desktop apps was disconnected by someone else', email: true },
+  'tickets.assigned': { label: 'A support ticket was assigned to you', email: true },
+  'tickets.replied': { label: 'A support ticket you raised has a reply', email: true },
+  'tickets.client_replied': { label: 'A client replied to a ticket assigned to you', email: false },
+  'tickets.sla_breached': { label: 'A ticket you handle missed its SLA', email: true },
+  'expenses.submitted': { label: 'An expense is waiting for your approval', email: false },
+  'expenses.decided': { label: 'Your expense was approved or rejected', email: true },
+  'leave.requested': { label: 'A leave request is waiting for your approval', email: true },
+  'leave.decided': { label: 'Your leave request was approved, rejected or cancelled', email: true },
+  'checklists.assigned': { label: 'An onboarding or offboarding task was assigned to you', email: false },
+  'timesheets.decided': { label: 'Your timesheet was approved or rejected', email: true },
+});

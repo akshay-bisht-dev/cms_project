@@ -1,0 +1,91 @@
+# Prometheus alerting rules for Orbit (docs/operations.md). Metric names come from
+# apps/api/src/services/metrics.js (API and worker, GET /metrics on METRICS_PORT) and kube-state-metrics.
+# Load with: rule_files: [alert-rules.yml]   (or wrap in a PrometheusRule for the Prometheus Operator)
+groups:
+  - name: orbit-api
+    rules:
+      - alert: OrbitApiLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service="api", route!="unmatched"}[5m]))) > 0.5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "API p95 latency above 500 ms for 10 minutes"
+          runbook: "docs/troubleshooting.md#slow-requests"
+      - alert: OrbitApi5xxRate
+        expr: |
+          sum(rate(http_request_duration_seconds_count{service="api", status_class="5xx"}[5m]))
+            / clamp_min(sum(rate(http_request_duration_seconds_count{service="api"}[5m])), 1e-9) > 0.01
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "More than 1 % of API requests fail with 5xx"
+          runbook: "docs/troubleshooting.md#errors-5xx"
+      - alert: OrbitApiDown
+        expr: absent(up{job="orbit-api"} == 1)
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "No API instance is being scraped"
+          runbook: "docs/troubleshooting.md#api-not-ready"
+
+  - name: orbit-worker
+    rules:
+      - alert: OrbitJobsFailing
+        expr: sum by (queue, name) (increase(job_failures_total{final="true"}[30m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Jobs {{ $labels.queue }}/{{ $labels.name }} failed after all retries"
+          runbook: "docs/troubleshooting.md#failed-jobs"
+      - alert: OrbitQueueBacklog
+        expr: sum by (queue) (queue_jobs{state="waiting"}) > 1000
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Queue {{ $labels.queue }} has more than 1000 waiting jobs for 15 minutes"
+          runbook: "docs/troubleshooting.md#failed-jobs"
+      - alert: OrbitOutboxLag
+        expr: max(outbox_oldest_pending_seconds) > 120
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Outbox events wait more than 2 minutes (notifications, emails, webhooks delayed)"
+          runbook: "docs/troubleshooting.md#outbox-lag"
+      - alert: OrbitWorkerCannotReadState
+        expr: min by (source) (metrics_source_up) == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Worker cannot read {{ $labels.source }}"
+          runbook: "docs/troubleshooting.md#api-not-ready"
+      - alert: OrbitWebhookBacklog
+        expr: max(webhook_deliveries_pending) > 500
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 500 webhook deliveries pending for 30 minutes"
+          runbook: "docs/troubleshooting.md#webhooks"
+
+  - name: orbit-operations
+    rules:
+      # kube-state-metrics: any failed run of a scheduled job (backup, restore check, partitions).
+      - alert: OrbitScheduledJobFailed
+        expr: |
+          sum by (job_name) (kube_job_status_failed{namespace="orbit"} > 0)
+            * on (job_name) group_left(owner_name) max by (job_name, owner_name) (kube_job_owner{namespace="orbit", owner_kind="CronJob"})
+        labels: { severity: critical }
+        annotations:
+          summary: "Scheduled job {{ $labels.owner_name }} failed"
+          runbook: "docs/backup-restore.md"
+      - alert: OrbitBackupMissing
+        expr: time() - max(kube_cronjob_status_last_successful_time{namespace="orbit", cronjob="mysql-backup"}) > 26 * 3600
+        labels: { severity: critical }
+        annotations:
+          summary: "No successful database backup in the last 26 hours"
+          runbook: "docs/backup-restore.md"
+      - alert: OrbitRestoreCheckMissing
+        expr: time() - max(kube_cronjob_status_last_successful_time{namespace="orbit", cronjob="mysql-restore-verify"}) > 8 * 86400
+        labels: { severity: critical }
+        annotations:
+          summary: "No verified restore in the last 8 days"
+          runbook: "docs/backup-restore.md"

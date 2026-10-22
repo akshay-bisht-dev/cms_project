@@ -1,0 +1,220 @@
+{
+  "summary": {
+    "base": "http://127.0.0.1:4200",
+    "concurrency": 10,
+    "durationS": 60,
+    "requests": 7585,
+    "rps": 126,
+    "p50": 31,
+    "p95": 334,
+    "p99": 414,
+    "errors": 0,
+    "budgetMs": 500
+  },
+  "endpoints": [
+    {
+      "endpoint": "notifications",
+      "requests": 846,
+      "errors": 0,
+      "statuses": {
+        "200": 846
+      },
+      "p50": 17,
+      "p95": 23,
+      "p99": 31,
+      "max": 39
+    },
+    {
+      "endpoint": "unread-count",
+      "requests": 1410,
+      "errors": 0,
+      "statuses": {
+        "200": 1410
+      },
+      "p50": 12,
+      "p95": 22,
+      "p99": 24,
+      "max": 29
+    },
+    {
+      "endpoint": "time-entries week",
+      "requests": 705,
+      "errors": 0,
+      "statuses": {
+        "200": 705
+      },
+      "p50": 28,
+      "p95": 36,
+      "p99": 39,
+      "max": 43
+    },
+    {
+      "endpoint": "my tasks",
+      "requests": 564,
+      "errors": 0,
+      "statuses": {
+        "200": 564
+      },
+      "p50": 46,
+      "p95": 54,
+      "p99": 57,
+      "max": 65
+    },
+    {
+      "endpoint": "activity day",
+      "requests": 420,
+      "errors": 0,
+      "statuses": {
+        "200": 420
+      },
+      "p50": 46,
+      "p95": 55,
+      "p99": 61,
+      "max": 80
+    },
+    {
+      "endpoint": "calendar month",
+      "requests": 280,
+      "errors": 0,
+      "statuses": {
+        "200": 280
+      },
+      "p50": 289,
+      "p95": 306,
+      "p99": 319,
+      "max": 330
+    },
+    {
+      "endpoint": "team activity",
+      "requests": 420,
+      "errors": 0,
+      "statuses": {
+        "200": 420
+      },
+      "p50": 26,
+      "p95": 31,
+      "p99": 34,
+      "max": 41
+    },
+    {
+      "endpoint": "activity week",
+      "requests": 280,
+      "errors": 0,
+      "statuses": {
+        "200": 280
+      },
+      "p50": 36,
+      "p95": 44,
+      "p99": 47,
+      "max": 52
+    },
+    {
+      "endpoint": "timesheet approvals",
+      "requests": 280,
+      "errors": 0,
+      "statuses": {
+        "200": 280
+      },
+      "p50": 17,
+      "p95": 22,
+      "p99": 25,
+      "max": 26
+    },
+    {
+      "endpoint": "dashboard summary",
+      "requests": 560,
+      "errors": 0,
+      "statuses": {
+        "200": 560
+      },
+      "p50": 332,
+      "p95": 350,
+      "p99": 362,
+      "max": 374
+    },
+    {
+      "endpoint": "employees page",
+      "requests": 560,
+      "errors": 0,
+      "statuses": {
+        "200": 560
+      },
+      "p50": 44,
+      "p95": 51,
+      "p99": 55,
+      "max": 63
+    },
+    {
+      "endpoint": "employee search",
+      "requests": 280,
+      "errors": 0,
+      "statuses": {
+        "200": 280
+      },
+      "p50": 48,
+      "p95": 53,
+      "p99": 57,
+      "max": 64
+    },
+    {
+      "endpoint": "trends 8 weeks",
+      "requests": 140,
+      "errors": 0,
+      "statuses": {
+        "200": 140
+      },
+      "p50": 415,
+      "p95": 449,
+      "p99": 467,
+      "max": 496
+    },
+    {
+      "endpoint": "time report 30 days",
+      "requests": 140,
+      "errors": 0,
+      "statuses": {
+        "200": 140
+      },
+      "p50": 252,
+      "p95": 271,
+      "p99": 278,
+      "max": 291
+    },
+    {
+      "endpoint": "projects",
+      "requests": 280,
+      "errors": 0,
+      "statuses": {
+        "200": 280
+      },
+      "p50": 236,
+      "p95": 252,
+      "p99": 264,
+      "max": 268
+    },
+    {
+      "endpoint": "audit log",
+      "requests": 280,
+      "errors": 0,
+      "statuses": {
+        "200": 280
+      },
+      "p50": 22,
+      "p95": 29,
+      "p99": 34,
+      "max": 39
+    },
+    {
+      "endpoint": "leave approvals",
+      "requests": 140,
+      "errors": 0,
+      "statuses": {
+        "200": 140
+      },
+      "p50": 14,
+      "p95": 20,
+      "p99": 24,
+      "max": 26
+    }
+  ]
+}

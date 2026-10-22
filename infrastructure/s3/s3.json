@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "orbit-dev",
+      "credentials": [{ "accessKey": "orbit_s3", "secretKey": "orbit_s3_dev_secret" }],
+      "actions": ["Admin", "Read", "List", "Tagging", "Write"]
+    }
+  ]
+}

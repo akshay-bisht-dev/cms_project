@@ -1,0 +1,142 @@
+# Scheduled operations (docs/operations.md). Each runs the ops image with its own Secret holding only
+# what that job needs. A failed run leaves a failed Job: alert on kube_job_status_failed.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mysql-backup
+spec:
+  schedule: "30 1 * * *"          # daily 01:30 UTC
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: mysql-backup, orbit/tier: ops }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999          # "mysql" in the ops image
+            runAsGroup: 999
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: backup
+              image: orbit-ops:set-by-overlay
+              command: ["node", "scripts/backup/backup.js"]
+              envFrom:
+                - secretRef: { name: orbit-backup }
+              resources:
+                requests: { cpu: 500m, memory: 512Mi }
+                limits: { memory: 1Gi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: [ALL] }
+              volumeMounts:
+                - { name: work, mountPath: /app/backups }
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: work
+              emptyDir: { sizeLimit: 50Gi }
+            - name: tmp
+              emptyDir: { sizeLimit: 64Mi }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mysql-restore-verify
+spec:
+  schedule: "0 4 * * 0"           # weekly, Sunday 04:00 UTC: restores the newest backup from object storage
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 14400
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: mysql-restore-verify, orbit/tier: ops }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: restore-verify
+              image: orbit-ops:set-by-overlay
+              command: ["node", "scripts/backup/restore-verify.js"]
+              # RESTORE_ADMIN_URL points at an isolated restore server, never the production primary.
+              envFrom:
+                - secretRef: { name: orbit-restore }
+              resources:
+                requests: { cpu: 500m, memory: 512Mi }
+                limits: { memory: 1Gi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: [ALL] }
+              volumeMounts:
+                - { name: work, mountPath: /app/backups }
+                - { name: tmp, mountPath: /tmp }
+                - { name: age-identity, mountPath: /run/secrets/age, readOnly: true }
+          volumes:
+            - name: work
+              emptyDir: { sizeLimit: 50Gi }
+            - name: tmp
+              emptyDir: { sizeLimit: 64Mi }
+            # The age private key that decrypts backups; present only here, never next to the backup job.
+            - name: age-identity
+              secret: { secretName: orbit-age-identity, optional: true, defaultMode: 0400 }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: partition-maintenance
+spec:
+  schedule: "15 2 * * *"          # daily 02:15 UTC
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: partition-maintenance, orbit/tier: ops }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: partition-maintenance
+              image: orbit-ops:set-by-overlay
+              command: ["node", "scripts/partition-maintenance.js"]
+              envFrom:
+                - secretRef: { name: orbit-maintenance }
+              resources:
+                requests: { cpu: 100m, memory: 256Mi }
+                limits: { memory: 512Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: [ALL] }
+              volumeMounts:
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: tmp
+              emptyDir: { sizeLimit: 64Mi }

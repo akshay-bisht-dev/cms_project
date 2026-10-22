@@ -1,0 +1,30 @@
+{
+  "name": "orbit",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @orbit/api --filter @orbit/web dev",
+    "dev:api": "pnpm --filter @orbit/api dev",
+    "dev:web": "pnpm --filter @orbit/web dev",
+    "build": "pnpm -r build",
+    "lint": "eslint . && node scripts/check-no-ts.mjs && node scripts/check-deploy.mjs",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "test:unit": "pnpm -r test:unit",
+    "check:no-ts": "node scripts/check-no-ts.mjs",
+    "db:migrate": "pnpm --filter @orbit/api db:migrate",
+    "db:seed": "pnpm --filter @orbit/api db:seed",
+    "db:reset": "pnpm --filter @orbit/api db:reset"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@next/eslint-plugin-next": "16.4.2",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "yaml": "2.8.1"
+  }
+}

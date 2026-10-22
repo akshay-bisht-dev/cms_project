@@ -1,0 +1,40 @@
+{
+  "name": "@orbit/desktop-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Orbit Desktop: transparent, consent-based screenshot capture for clocked-in work time.",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "setup": "node node_modules/electron/install.js",
+    "start": "electron .",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "dist": "electron-builder --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
+  },
+  "devDependencies": {
+    "electron": "44.9.3",
+    "electron-builder": "26.15.3",
+    "vitest": "5.0.5"
+  },
+  "build": {
+    "appId": "com.orbit.desktop",
+    "productName": "Orbit Desktop",
+    "files": ["src/**/*", "assets/**/*", "package.json"],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "Orbit Desktop takes screenshots only while you are clocked in and working, as described in your organization's monitoring notice."
+      }
+    },
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage", "category": "Office" },
+    "publish": [{ "provider": "generic", "url": "${env.ORBIT_UPDATE_URL}" }]
+  }
+}

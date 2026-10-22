@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* Design tokens (docs/frontend.md §5). Exposed to Tailwind via @theme below. */
+:root {
+  --background: #f7f7fa;
+  --foreground: #1c1830;
+  --muted: #f0eff5;
+  --muted-foreground: #5d5873;
+  --card: #ffffff;
+  --card-foreground: #1c1830;
+  --border: #e6e4ee;
+  --input: #d9d6e4;
+  --ring: #6d4ae0;
+  --primary: #6d4ae0;
+  --primary-hover: #5a39c9;
+  --primary-foreground: #ffffff;
+  --secondary: #efeafd;
+  --secondary-foreground: #3b2a7a;
+  --sidebar: #2a1b4e;
+  --sidebar-foreground: #e9e4f5;
+  --sidebar-active: #4b3584;
+  --success: #126b32;
+  --warning: #9a4508;
+  --danger: #c62828;
+  --info: #1d4ed8;
+  /* Chart series (validated: lightness, chroma, CVD and contrast on white). */
+  --series-1: #6d4ae0;
+  --series-2: #d4730f;
+  --radius: 12px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 6px);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * { border-color: var(--border); }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}

@@ -1,0 +1,16 @@
+# Non-secret settings. Secrets live in the "orbit-secrets", "orbit-migrate" and "orbit-ops" Secrets,
+# created by your secret manager (External Secrets, Sealed Secrets, …); see secrets.example.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-config
+data:
+  NODE_ENV: production
+  APP_ENV: production
+  LOG_LEVEL: info
+  LOG_PRETTY: "false"
+  TRUST_PROXY: "1"
+  METRICS_PORT: "9464"
+  REDIS_KEY_PREFIX: "orbit:"
+  S3_REGION: eu-west-1
+  SMTP_PORT: "587"

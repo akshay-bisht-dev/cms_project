@@ -1,0 +1,114 @@
+# Local development stack.
+#   docker compose up -d                 # infrastructure only (run api/web with pnpm dev)
+#   docker compose --profile app up -d   # everything in containers, served at http://localhost:8080
+name: orbit
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: orbit_root_dev
+    ports: ["127.0.0.1:3306:3306"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./infrastructure/mysql/my.cnf:/etc/mysql/conf.d/orbit.cnf:ro
+      - ./infrastructure/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-porbit_root_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports: ["127.0.0.1:6379:6379"]
+    volumes:
+      - redis-data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # S3-compatible object storage for local development (SeaweedFS; MinIO images are no longer published).
+  s3:
+    image: chrislusf/seaweedfs:4.48
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
+    ports: ["127.0.0.1:8333:8333"]
+    volumes:
+      - s3-data:/data
+      - ./infrastructure/s3/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Creates the private buckets once storage is up.
+  s3-init:
+    image: amazon/aws-cli:2.38.3
+    depends_on:
+      s3: { condition: service_healthy }
+    environment:
+      AWS_ACCESS_KEY_ID: orbit_s3
+      AWS_SECRET_ACCESS_KEY: orbit_s3_dev_secret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        for b in orbit-captures-local orbit-files-local orbit-test; do
+          aws --endpoint-url http://s3:8333 s3api head-bucket --bucket $$b 2>/dev/null ||
+          aws --endpoint-url http://s3:8333 s3api create-bucket --bucket $$b;
+        done
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+
+  api:
+    profiles: [app]
+    build: { context: ., dockerfile: infrastructure/docker/api.Dockerfile, target: api }
+    env_file: .env
+    environment: &container-env
+      DATABASE_URL: mysql://orbit_app:orbit_app_dev@mysql:3306/orbit
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://s3:8333
+      SMTP_HOST: mailpit
+      LOG_PRETTY: "false"
+      APP_ORIGIN: http://localhost:8080
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      s3-init: { condition: service_completed_successfully }
+
+  worker:
+    profiles: [app]
+    build: { context: ., dockerfile: infrastructure/docker/api.Dockerfile, target: worker }
+    env_file: .env
+    environment: *container-env
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  web:
+    profiles: [app]
+    build: { context: ., dockerfile: infrastructure/docker/web.Dockerfile }
+    environment:
+      API_INTERNAL_URL: http://api:4000
+    depends_on: [api]
+
+  nginx:
+    profiles: [app]
+    image: nginx:1.28-alpine
+    ports: ["127.0.0.1:8080:80"]
+    volumes:
+      - ./infrastructure/nginx/conf.d/orbit.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [api, web]
+
+volumes:
+  mysql-data:
+  redis-data:
+  s3-data:

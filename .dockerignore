@@ -1,0 +1,23 @@
+# Keep the build context to source: never local dependencies, builds, test output or secrets.
+**/node_modules
+**/.next
+**/.next-e2e
+**/test-results
+**/playwright-report
+**/coverage
+**/*.log
+**/.DS_Store
+.git
+.github
+.local
+backups
+docs
+# Environment files hold secrets; containers get configuration from the orchestrator.
+**/.env
+**/.env.*
+!.env.example
+# Tests and fixtures do not belong in runtime images.
+apps/api/tests
+apps/web/tests
+apps/web/e2e
+apps/desktop-agent

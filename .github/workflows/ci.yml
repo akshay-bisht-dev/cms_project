@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # The release workflow runs the full suite before building release images.
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: 1
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - name: Prisma client
+        run: pnpm --filter @orbit/api exec prisma generate
+      - run: pnpm --filter @orbit/api test:unit
+      - run: pnpm --filter @orbit/web test
+      # Desktop agent logic (Electron itself is not started in CI).
+      - run: pnpm --filter @orbit/desktop-agent test
+      - run: pnpm --filter @orbit/web build
+
+  integration:
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: orbit_root_dev
+          MYSQL_DATABASE: orbit_test
+          MYSQL_USER: orbit_app
+          MYSQL_PASSWORD: orbit_app_dev
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -porbit_root_dev"
+          --health-interval 5s --health-timeout 3s --health-retries 30
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20
+    env:
+      DATABASE_URL_TEST: mysql://orbit_app:orbit_app_dev@127.0.0.1:3306/orbit_test
+      SHADOW_DATABASE_URL: mysql://root:orbit_root_dev@127.0.0.1:3306/orbit_shadow
+      REDIS_URL: redis://127.0.0.1:6379
+      S3_ACCESS_KEY_ID: ci
+      S3_SECRET_ACCESS_KEY: ci-secret
+      S3_BUCKET_CAPTURES: orbit-captures-ci
+      S3_BUCKET_FILES: orbit-files-ci
+      SESSION_SECRET: ci-session-secret-ci-session-secret-000
+      CSRF_SECRET: ci-csrf-secret-ci-csrf-secret-000000000
+      # Test-only key (32 bytes of 0x07); never used outside CI.
+      FIELD_ENCRYPTION_KEYS: ci1:BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @orbit/api exec prisma generate
+      - name: Allow triggers with binary logging on
+        run: mysql -h 127.0.0.1 -uroot -porbit_root_dev -e "SET GLOBAL log_bin_trust_function_creators = 1"
+      - name: Migration drift check (schema.prisma vs migrations)
+        working-directory: apps/api
+        run: >
+          pnpm exec prisma migrate diff
+          --from-migrations prisma/migrations
+          --to-schema-datamodel prisma/schema.prisma
+          --shadow-database-url "$SHADOW_DATABASE_URL"
+          --exit-code
+      # Includes the OpenAPI drift test and a real backup → restore → verify round trip (the runner image
+      # ships the mysql/mysqldump clients; the test restores as SHADOW_DATABASE_URL's root user).
+      - run: pnpm --filter @orbit/api test:integration
+
+  docker-build:
+    runs-on: ubuntu-24.04
+    needs: [lint-and-unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build every image
+        run: |
+          for target in api worker migrate ops; do
+            docker buildx build --load -f infrastructure/docker/api.Dockerfile --target "$target" -t "orbit-$target:ci" .
+          done
+          docker buildx build --load -f infrastructure/docker/web.Dockerfile -t orbit-web:ci .
+      - name: Scan images (fail on fixable critical/high vulnerabilities)
+        run: |
+          for image in orbit-api:ci orbit-worker:ci orbit-web:ci orbit-ops:ci; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.66.0 \
+              image --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$image"
+          done
+      - name: Ops image has its tools
+        run: docker run --rm orbit-ops:ci sh -c 'node --version && mysqldump --version && age --version'
+
+  # The real-infrastructure suite (Redis, S3) against the development docker compose stack.
+  compose-infra:
+    runs-on: ubuntu-24.04
+    needs: [lint-and-unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @orbit/api exec prisma generate
+      - run: cp .env.example .env
+      - run: docker compose up -d --wait mysql redis s3 mailpit
+      - name: Create buckets (one-shot)
+        run: docker compose up --exit-code-from s3-init s3-init
+      - name: Allow triggers with binary logging on
+        run: docker compose exec -T mysql mysql -uroot -porbit_root_dev -e 'SET GLOBAL log_bin_trust_function_creators = 1'
+      - run: pnpm --filter @orbit/api test:infra
+      - if: failure()
+        run: docker compose logs --tail 200
+
+  e2e:
+    runs-on: ubuntu-24.04
+    needs: [lint-and-unit]
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: orbit_root_dev
+          MYSQL_DATABASE: orbit_e2e_test
+          MYSQL_USER: orbit_app
+          MYSQL_PASSWORD: orbit_app_dev
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -porbit_root_dev"
+          --health-interval 5s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL_E2E: mysql://orbit_app:orbit_app_dev@127.0.0.1:3306/orbit_e2e_test
+      S3_ACCESS_KEY_ID: ci
+      S3_SECRET_ACCESS_KEY: ci-secret
+      S3_BUCKET_CAPTURES: orbit-captures-ci
+      S3_BUCKET_FILES: orbit-files-ci
+      SESSION_SECRET: ci-session-secret-ci-session-secret-000
+      CSRF_SECRET: ci-csrf-secret-ci-csrf-secret-000000000
+      FIELD_ENCRYPTION_KEYS: ci1:BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @orbit/api exec prisma generate
+      - name: Allow triggers with binary logging on
+        run: mysql -h 127.0.0.1 -uroot -porbit_root_dev -e "SET GLOBAL log_bin_trust_function_creators = 1"
+      - run: pnpm --filter @orbit/web exec playwright install --with-deps chromium
+      # The API runs as a least-privilege user (SELECT/INSERT/UPDATE/DELETE only), as in production.
+      - name: Provision the least-privilege app user
+        run: |
+          PASSWORD=$(node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))")
+          echo "::add-mask::$PASSWORD"
+          DATABASE_ADMIN_URL=mysql://root:orbit_root_dev@127.0.0.1:3306/orbit_e2e_test DB_USER_PREFIX=orbit_e2e DB_APP_PASSWORD="$PASSWORD" \
+            node apps/api/scripts/provision-db-users.js
+          echo "DATABASE_URL_E2E_APP=mysql://orbit_e2e_app:$PASSWORD@127.0.0.1:3306/orbit_e2e_test" >> "$GITHUB_ENV"
+      - run: pnpm --filter @orbit/web test:e2e
+        env: { CI: "true" }
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-report, path: apps/web/playwright-report, retention-days: 7 }

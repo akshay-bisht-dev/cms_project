@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbit Desktop</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Orbit Desktop</h1>
+
+      <section id="pair" hidden aria-labelledby="pair-title">
+        <h2 id="pair-title">Connect to Orbit</h2>
+        <p class="muted">Sign in to Orbit in your browser, open <strong>My Monitoring</strong>, choose <strong>Connect desktop app</strong> and enter the code here.</p>
+        <form id="pair-form">
+          <label for="server">Orbit address</label>
+          <input id="server" name="server" type="url" placeholder="https://orbit.example.com" required autocomplete="url" />
+          <label for="code">Pairing code</label>
+          <input id="code" name="code" required autocomplete="one-time-code" placeholder="ABCD-EFGH" maxlength="16" />
+          <button type="submit">Connect</button>
+        </form>
+        <p id="pair-error" class="error" role="alert"></p>
+      </section>
+
+      <section id="connected" hidden aria-labelledby="status-title">
+        <h2 id="status-title" class="visually-hidden">Status</h2>
+        <p id="state" class="state" role="status" aria-live="polite"></p>
+        <dl>
+          <dt>Account</dt>
+          <dd id="who"></dd>
+          <dt>Last screenshot</dt>
+          <dd id="last"></dd>
+          <dt>Waiting to upload</dt>
+          <dd id="queue"></dd>
+          <dt>Screen-recording permission</dt>
+          <dd id="permission"></dd>
+        </dl>
+        <p id="error" class="error"></p>
+        <div class="actions">
+          <button type="button" id="grant" hidden>Grant screen-recording permission</button>
+          <button type="button" id="open-page">What is captured and who can see it</button>
+          <label class="check"><input type="checkbox" id="notify" /> Notify me each time a screenshot is taken</label>
+          <button type="button" id="disconnect" class="secondary">Disconnect this computer</button>
+        </div>
+      </section>
+
+      <section id="revoked" hidden>
+        <p class="state">This computer was disconnected from Orbit. Its queued screenshots and keys were deleted.</p>
+        <button type="button" id="reconnect">Connect again</button>
+      </section>
+
+      <p class="muted small">Screenshots are taken only while you are clocked in and working, never during breaks. Keystrokes, clipboard, microphone and webcam are never recorded.</p>
+    </main>
+    <script src="renderer.js"></script>
+  </body>
+</html>

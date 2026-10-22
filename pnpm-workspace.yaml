@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 10 blocks dependency install scripts by default; allow only these.
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
+  - sharp
+  - unrs-resolver
+
+# Security overrides (pnpm audit). Remove once the parent package ships the fix.
+overrides:
+  # GHSA-ggr8-5vv4-36mx via prisma > @prisma/config (config loading only). Prisma uses just `deepmerge`, unchanged in v8.
+  deepmerge-ts: ^8.0.0

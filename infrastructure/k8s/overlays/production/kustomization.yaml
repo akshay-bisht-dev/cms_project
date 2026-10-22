@@ -1,0 +1,20 @@
+# Production overlay. The release pipeline sets the image tags:
+#   kustomize edit set image orbit-api=ghcr.io/acme/orbit-api:1.4.0 orbit-worker=… orbit-web=… orbit-ops=…
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - { name: orbit-api, newName: ghcr.io/example/orbit-api, newTag: 0.0.0 }
+  - { name: orbit-worker, newName: ghcr.io/example/orbit-worker, newTag: 0.0.0 }
+  - { name: orbit-web, newName: ghcr.io/example/orbit-web, newTag: 0.0.0 }
+  - { name: orbit-ops, newName: ghcr.io/example/orbit-ops, newTag: 0.0.0 }
+patches:
+  - target: { kind: Ingress, name: orbit }
+    patch: |-
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: orbit.example.com
+      - op: replace
+        path: /spec/rules/0/host
+        value: orbit.example.com

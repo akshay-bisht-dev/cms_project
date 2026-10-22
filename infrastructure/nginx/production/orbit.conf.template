@@ -1,0 +1,95 @@
+# Production edge (TLS termination). The nginx image renders this template with envsubst at start:
+# only defined environment variables (ORBIT_DOMAIN) are replaced, so nginx's own $variables are kept.
+# Certificates: Let's Encrypt via certbot webroot (docs/deployment-guide.md §TLS).
+
+upstream orbit_api { server api:4000; keepalive 32; }
+upstream orbit_web { server web:3000; keepalive 32; }
+
+map $http_x_request_id $orbit_request_id {
+  default $http_x_request_id;
+  ""      $request_id;
+}
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ""      "";
+}
+
+limit_req_zone $binary_remote_addr zone=orbit_api_ip:10m rate=30r/s;
+limit_req_zone $binary_remote_addr zone=orbit_auth_ip:10m rate=5r/s;
+limit_req_status 429;
+
+server_tokens off;
+
+# Plain HTTP: certificate challenges and a redirect, nothing else.
+server {
+  listen 80;
+  listen [::]:80;
+  server_name ${ORBIT_DOMAIN};
+
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location = /healthz { access_log off; return 200 "ok\n"; }
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl;
+  listen [::]:443 ssl;
+  http2 on;
+  server_name ${ORBIT_DOMAIN};
+
+  ssl_certificate     /etc/letsencrypt/live/${ORBIT_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${ORBIT_DOMAIN}/privkey.pem;
+  # Mozilla "intermediate" profile: TLS 1.2 + 1.3, forward-secret AEAD ciphers only.
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+  ssl_prefer_server_ciphers off;
+  ssl_session_timeout 1d;
+  ssl_session_cache shared:orbit_tls:10m;
+  ssl_session_tickets off;
+  ssl_stapling on;
+  ssl_stapling_verify on;
+  ssl_trusted_certificate /etc/letsencrypt/live/${ORBIT_DOMAIN}/chain.pem;
+  resolver 1.1.1.1 9.9.9.9 valid=300s;
+  resolver_timeout 5s;
+
+  # The API and web app set their own headers (including CSP with a nonce); these cover anything else.
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+  add_header X-Content-Type-Options "nosniff" always;
+
+  client_max_body_size 2m;   # uploads go directly to object storage
+  gzip on;
+  gzip_types application/json text/css application/javascript image/svg+xml;
+
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto https;
+  proxy_set_header X-Request-Id $orbit_request_id;
+  proxy_set_header Connection "";
+
+  location = /healthz { access_log off; return 200 "ok\n"; }
+
+  # Sign-in, reset and MFA: tighter per-IP limit at the edge (the API also limits per account).
+  location ~ ^/api/v1/auth/(login|forgot-password|reset-password|mfa) {
+    limit_req zone=orbit_auth_ip burst=10 nodelay;
+    proxy_pass http://orbit_api;
+  }
+
+  location /api/ {
+    limit_req zone=orbit_api_ip burst=60 nodelay;
+    proxy_read_timeout 30s;
+    proxy_pass http://orbit_api;
+  }
+
+  location /socket.io/ {
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_read_timeout 120s;
+    proxy_pass http://orbit_api;
+  }
+
+  location / {
+    proxy_pass http://orbit_web;
+  }
+}

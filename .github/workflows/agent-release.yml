@@ -1,0 +1,83 @@
+# Desktop agent release: tag agent-vX.Y.Z → tested, signed (and notarized on macOS) installers.
+# Signing material lives only in the "agent-signing" environment's secrets (docs/release-checklist.md):
+#   macOS:   MAC_CSC_LINK (base64 .p12 of the Developer ID Application certificate), MAC_CSC_KEY_PASSWORD,
+#            APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+#   Windows: WIN_CSC_LINK (base64 .pfx; an EV certificate avoids SmartScreen warnings), WIN_CSC_KEY_PASSWORD
+# Without them the job still builds, but the artifact is named "-UNSIGNED" and must not be distributed.
+name: Desktop agent release
+
+on:
+  push:
+    tags: ['agent-v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14, platform: mac }
+          - { os: windows-2022, platform: win }
+    runs-on: ${{ matrix.os }}
+    environment: agent-signing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @orbit/desktop-agent test
+      - name: Build installers
+        shell: bash
+        working-directory: apps/desktop-agent
+        env:
+          ORBIT_UPDATE_URL: ${{ vars.AGENT_UPDATE_URL }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          signed=false
+          if [ "${{ matrix.platform }}" = mac ] && [ -n "$MAC_CSC_LINK" ] && [ -n "$APPLE_ID" ]; then
+            export CSC_LINK="$MAC_CSC_LINK" CSC_KEY_PASSWORD="$MAC_CSC_KEY_PASSWORD"
+            pnpm exec electron-builder --mac --publish never -c.mac.notarize=true
+            signed=true
+          elif [ "${{ matrix.platform }}" = win ] && [ -n "$WIN_CSC_LINK" ]; then
+            export CSC_LINK="$WIN_CSC_LINK" CSC_KEY_PASSWORD="$WIN_CSC_KEY_PASSWORD"
+            pnpm exec electron-builder --win --publish never
+            signed=true
+          else
+            echo "::warning::No signing credentials: building UNSIGNED installers (not for distribution)."
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            pnpm exec electron-builder --${{ matrix.platform }} --publish never
+          fi
+          echo "SIGNED=$signed" >> "$GITHUB_ENV"
+      - name: Verify signatures
+        if: env.SIGNED == 'true'
+        shell: bash
+        working-directory: apps/desktop-agent/dist
+        run: |
+          if [ "${{ matrix.platform }}" = mac ]; then
+            app=$(find . -maxdepth 3 -name '*.app' | head -1)
+            codesign --verify --deep --strict --verbose=2 "$app"
+            spctl --assess --type execute --verbose "$app"
+            xcrun stapler validate "$app"
+          else
+            powershell -Command "Get-ChildItem -Filter *.exe | ForEach-Object { \$s = Get-AuthenticodeSignature \$_.FullName; if (\$s.Status -ne 'Valid') { throw \"\$(\$_.Name): \$(\$s.Status)\" } }"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orbit-desktop-${{ matrix.platform }}${{ env.SIGNED == 'true' && '' || '-UNSIGNED' }}
+          path: |
+            apps/desktop-agent/dist/*.dmg
+            apps/desktop-agent/dist/*.zip
+            apps/desktop-agent/dist/*.exe
+            apps/desktop-agent/dist/*.yml
+          retention-days: 30
