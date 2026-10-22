@@ -22,7 +22,7 @@ spec:
           automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
-            runAsUser: 999          # "mysql" in the ops image
+            runAsUser: 999          # "ops" in the ops image
             runAsGroup: 999
             seccompProfile: { type: RuntimeDefault }
           containers:

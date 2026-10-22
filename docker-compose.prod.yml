@@ -119,7 +119,7 @@ services:
     restart: "no"
     image: ${ORBIT_REGISTRY}/orbit-ops:${ORBIT_VERSION}
     env_file: [/etc/orbit/ops.env]
-    # Host directory owned by uid 999 (the image's mysql user); restore-verify reads the same files.
+    # Host directory owned by uid 999 (the ops image's user); restore-verify reads the same files.
     volumes: ["/var/backups/orbit:/app/backups"]
     command: ["node", "scripts/backup/backup.js"]
     networks: [frontend, backend]

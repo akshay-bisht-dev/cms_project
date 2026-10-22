@@ -50,21 +50,35 @@ FROM runtime AS migrate
 CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
 
 # Operations jobs: backups, restore verification, partition maintenance, user provisioning.
-# Based on the official MySQL image for matching mysqldump/mysql clients (Alpine only ships MariaDB's);
-# Node comes from the official image, and the Prisma engine is generated here for this platform.
+# A minimal Oracle Linux 9 with only MySQL's official client package (matching mysql/mysqldump; Alpine
+# only ships MariaDB's), Node from the official image, and age built from source. The MySQL *server*
+# image is deliberately not used: it bundles MySQL Shell's Python runtime and gosu, which the jobs never
+# need and which carry their own advisories.
 #   docker build -f infrastructure/docker/api.Dockerfile --target ops -t orbit-ops .
 #   docker run --rm --env-file ops.env orbit-ops node scripts/backup/backup.js
-# age (backup encryption) from Debian's signed repositories; it is a static Go binary.
-FROM debian:bookworm-slim AS age
-RUN apt-get update && apt-get install -y --no-install-recommends age && rm -rf /var/lib/apt/lists/*
 
-FROM mysql:8.4 AS ops
+# age (backup encryption), statically built with a current Go toolchain. Its Go dependencies are raised
+# to their latest patch releases; age's own go.mod would otherwise pin older versions.
+FROM golang:1.26-alpine AS age
+WORKDIR /src
+RUN go mod init build \
+ && go get filippo.io/age@v1.2.1 golang.org/x/crypto@latest golang.org/x/sys@latest golang.org/x/term@latest \
+ && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/age filippo.io/age/cmd/age \
+ && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/age-keygen filippo.io/age/cmd/age-keygen
+
+FROM oraclelinux:9-slim AS ops
+# MySQL's repository package installs the repo and its GPG key; packages are signature-checked.
+RUN rpm -Uvh https://repo.mysql.com/mysql84-community-release-el9-2.noarch.rpm \
+ && microdnf install -y --nodocs mysql-community-client libstdc++ \
+ && microdnf clean all \
+ && echo 'ops:x:999:999:Orbit ops jobs:/app:/sbin/nologin' >> /etc/passwd \
+ && echo 'ops:x:999:' >> /etc/group
 COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
-COPY --from=age /usr/bin/age /usr/bin/age-keygen /usr/local/bin/
-COPY --from=build --chown=mysql:mysql /out /app
+COPY --from=age /out/age /out/age-keygen /usr/local/bin/
+COPY --from=build --chown=999:999 /out /app
 WORKDIR /app
-RUN ./node_modules/.bin/prisma generate && mkdir -p /app/backups && chown mysql:mysql /app/backups
-USER mysql
+# Generates the Prisma engine for this platform (rhel-openssl-3.0.x).
+RUN ./node_modules/.bin/prisma generate && mkdir -p /app/backups && chown 999:999 /app/backups
+USER 999:999
 ENV NODE_ENV=production BACKUP_DIR=/app/backups
-ENTRYPOINT []
 CMD ["node", "scripts/backup/backup.js"]
