@@ -72,8 +72,9 @@ jobs:
         with: { node-version-file: .nvmrc, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @orbit/api exec prisma generate
-      - name: Allow triggers with binary logging on
-        run: mysql -h 127.0.0.1 -uroot -porbit_root_dev -e "SET GLOBAL log_bin_trust_function_creators = 1"
+      # Triggers need log_bin_trust_function_creators; the drift check needs an existing shadow database.
+      - name: Prepare MySQL (trigger creation, shadow database)
+        run: mysql -h 127.0.0.1 -uroot -porbit_root_dev -e "SET GLOBAL log_bin_trust_function_creators = 1; CREATE DATABASE IF NOT EXISTS orbit_shadow"
       - name: Migration drift check (schema.prisma vs migrations)
         working-directory: apps/api
         run: >

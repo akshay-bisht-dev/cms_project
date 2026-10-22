@@ -7,7 +7,7 @@ export const E2E_PASSWORD = 'E2e-Passphrase-2026';
 
 const apiEnv = {
   // The API may run as a least-privilege user (SELECT/INSERT/UPDATE/DELETE only), as in production;
-  // global setup still migrates and seeds with DATABASE_URL_E2E.
+  // the database is migrated and seeded first with DATABASE_URL_E2E (see webServer below).
   DATABASE_URL: process.env.DATABASE_URL_E2E_APP ?? process.env.DATABASE_URL_E2E ?? 'mysql://orbit_app:orbit_app_dev@localhost:3306/orbit_e2e_test',
   PORT: String(API_PORT),
   APP_ORIGIN: WEB_URL,
@@ -16,6 +16,8 @@ const apiEnv = {
   LOG_PRETTY: 'false',
   // Tests sign in many times as the same users; rate limits have their own API tests.
   RATE_LIMIT_ENABLED: 'false',
+  // Read by the seed (prepare-e2e-db.js), which runs before the API starts.
+  SEED_PASSWORD: E2E_PASSWORD,
 };
 
 const webEnv = {
@@ -28,7 +30,8 @@ const webEnv = {
 
 /**
  * End-to-end tests against the real API (port 4100, database orbit_e2e_test) and a production
- * build of the web app (port 3100). The database is reset and seeded in globalSetup.
+ * build of the web app (port 3100). The API's start command first migrates, empties and seeds the
+ * database: Playwright starts web servers before globalSetup, so the API must not depend on it.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -38,7 +41,6 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 7_000 },
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
-  globalSetup: './e2e/global-setup.js',
   use: {
     baseURL: WEB_URL,
     trace: 'retain-on-failure',
@@ -47,11 +49,11 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: 'node --env-file-if-exists=../../.env ../api/src/server.js',
+      command: 'node --env-file-if-exists=../../.env ../api/scripts/prepare-e2e-db.js && node --env-file-if-exists=../../.env ../api/src/server.js',
       url: `http://localhost:${API_PORT}/api/v1/health/live`,
       env: apiEnv,
       reuseExistingServer: false,
-      timeout: 60_000,
+      timeout: 180_000,
     },
     {
       command: 'next build && next start --port 3100',

@@ -1,5 +1,6 @@
 // Exercises the real Redis and S3 clients. Requires `docker compose up -d`.
-import { afterAll, describe, expect, it } from 'vitest';
+import { once } from 'node:events';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pino from 'pino';
 import request from 'supertest';
 import { loadEnv } from '../../src/config/env.js';
@@ -14,9 +15,16 @@ const prisma = createPrisma({ logger });
 const redis = createRedis(env, { logger });
 const storage = createStorage(env);
 
+// The client connects asynchronously and queues nothing while offline (enableOfflineQueue: false):
+// probing readiness before it is connected would report Redis down.
+beforeAll(async () => {
+  if (redis.status !== 'ready') await once(redis, 'ready');
+}, 20_000);
+
 afterAll(async () => {
   await prisma.$disconnect();
-  await redis.quit();
+  // quit() rejects on a client that never connected; disconnect() does not.
+  redis.disconnect();
   storage.destroy();
 });
 
