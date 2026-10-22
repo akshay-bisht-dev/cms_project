@@ -58,11 +58,12 @@ CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
 #   docker run --rm --env-file ops.env orbit-ops node scripts/backup/backup.js
 
 # age (backup encryption), statically built with a current Go toolchain. Its Go dependencies are raised
-# to their latest patch releases; age's own go.mod would otherwise pin older versions.
-FROM golang:1.26-alpine AS age
+# to their latest patch releases; age's own go.mod would otherwise pin older versions. Getting the
+# command packages (not just the module) records the checksums of everything they import.
+FROM golang:1.27-alpine AS age
 WORKDIR /src
 RUN go mod init build \
- && go get filippo.io/age@v1.2.1 golang.org/x/crypto@latest golang.org/x/sys@latest golang.org/x/term@latest \
+ && go get filippo.io/age/cmd/age@v1.2.1 filippo.io/age/cmd/age-keygen@v1.2.1 golang.org/x/crypto@latest golang.org/x/sys@latest golang.org/x/term@latest \
  && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/age filippo.io/age/cmd/age \
  && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/age-keygen filippo.io/age/cmd/age-keygen
 
